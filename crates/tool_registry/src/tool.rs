@@ -9,10 +9,10 @@ use serde_json::Value;
 /// All methods are `&self` so the struct can be `Arc`-shared across threads.
 pub trait ChatTool: Send + Sync {
     /// Short, unique snake_case name used by the LLM to invoke this tool.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
 
     /// Human-readable description sent to the LLM in the system prompt / tool list.
-    fn description(&self) -> &'static str;
+    fn description(&self) -> &str;
 
     /// JSON Schema object describing the accepted `arguments` payload.
     ///
@@ -20,7 +20,7 @@ pub trait ChatTool: Send + Sync {
     fn parameters_schema(&self) -> Value;
 
     /// Optional category for grouping tools in the system prompt.
-    fn category(&self) -> Option<&'static str> {
+    fn category(&self) -> Option<&str> {
         None
     }
 

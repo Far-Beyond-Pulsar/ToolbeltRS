@@ -41,6 +41,11 @@ Define tools once. Dispatch them anywhere. Ship plugins that contribute tools at
   - [External documentation files](#external-documentation-files)
   - [Generated code](#generated-code)
 - [The tool_params macro](#the-tool_params-macro)
+- [Runtime tools](#runtime-tools)
+  - [DynamicTool builder](#dynamictool-builder)
+  - [register_fn shorthand](#register_fn-shorthand)
+  - [build_tool fluent API](#build_tool-fluent-api)
+  - [Unregistering tools](#unregistering-tools)
 - [Plugin system](#plugin-system)
   - [PluginToolRegistry](#plugintoolregistry)
   - [Implementing ToolPlugin](#implementing-toolplugin)
@@ -242,6 +247,14 @@ registry.merge_plugin(&plugin.tool_registry());
 
 // From a ToolPlugin implementor
 registry.add_plugin(&MyPlugin);
+
+// Inline closure — no struct required
+registry.register_fn(
+    "ping",
+    "Returns pong",
+    tool_params!(),
+    |_args, _ctx| Ok(json!({ "message": "pong" })),
+);
 ```
 
 ### Executing tools
@@ -472,6 +485,109 @@ assert_eq!(schema["properties"]["limit"]["type"], "integer");
 Supported JSON types: `string`, `integer`, `number`, `boolean`, `object`, `array`.
 
 `req` entries appear in `required`; `opt` entries do not.
+
+---
+
+## Runtime tools
+
+All the patterns above define tools at compile time.  `DynamicTool` lets you
+create and register tools **at runtime** using ordinary closures — no struct, no
+trait impl, no macro required.
+
+This is useful for:
+- Loading tool definitions from a config file or database at start-up.
+- Generating tools programmatically (e.g. one tool per database table).
+- Tests that need a quick throwaway tool without boilerplate.
+
+### DynamicTool builder
+
+```rust
+use tool_registry::{DynamicTool, ToolRegistry, ToolContext, tool_params};
+use serde_json::json;
+use std::sync::Arc;
+
+let tool = DynamicTool::builder("greet")
+    .description("Return a greeting for the given name")
+    .category("util")
+    .parameters(tool_params! { req "name": string = "Name to greet" })
+    .handler(|args, _ctx| {
+        let name = args["name"].as_str().unwrap_or("world");
+        Ok(json!({ "greeting": format!("Hello, {name}!") }))
+    })
+    .build();
+
+let mut registry = ToolRegistry::new();
+registry.register(Arc::new(tool));
+
+let result = registry
+    .execute("greet", json!({ "name": "Alice" }), &ToolContext::default())
+    .unwrap();
+assert_eq!(result["greeting"], "Hello, Alice!");
+```
+
+**Builder methods:**
+
+| Method | Required | Description |
+|--------|----------|-------------|
+| `DynamicTool::builder(name)` | yes | Start building; sets the tool name |
+| `.description(desc)` | no | Human-readable description for the LLM |
+| `.category(cat)` | no | Grouping category |
+| `.parameters(schema)` | no | JSON Schema value (use `tool_params!`) |
+| `.handler(closure)` | **yes** | `Fn(Value, &ToolContext) -> anyhow::Result<Value>` |
+| `.build()` | — | Consumes builder; panics if no handler was set |
+
+### register_fn shorthand
+
+For simple tools without a category, `register_fn` skips the builder entirely:
+
+```rust
+registry.register_fn(
+    "ping",
+    "Returns pong",
+    tool_params!(),
+    |_args, _ctx| Ok(json!({ "message": "pong" })),
+);
+```
+
+Signature: `register_fn(name, description, parameters_schema, handler)`.
+
+### build_tool fluent API
+
+`build_tool` is a convenience method that returns a `DynamicToolBuilder`
+directly from the registry (useful when you want to keep everything on one
+object without importing `DynamicTool`):
+
+```rust
+let tool = registry
+    .build_tool("multiply")
+    .description("Multiply two numbers")
+    .category("math")
+    .parameters(tool_params! {
+        req "a": number = "First factor",
+        req "b": number = "Second factor",
+    })
+    .handler(|args, _ctx| {
+        let a = args["a"].as_f64().unwrap_or(0.0);
+        let b = args["b"].as_f64().unwrap_or(0.0);
+        Ok(json!({ "result": a * b }))
+    })
+    .build();
+registry.register(std::sync::Arc::new(tool));
+```
+
+### Unregistering tools
+
+`unregister` removes a tool by name at runtime.  It returns `true` if the tool
+was present and removed, `false` otherwise.
+
+```rust
+// Register then later remove
+registry.register_fn("temp_tool", "Temporary", tool_params!(), |_a, _c| Ok(json!({})));
+
+// … later
+let removed = registry.unregister("temp_tool"); // → true
+registry.unregister("temp_tool");               // → false (already gone)
+```
 
 ---
 

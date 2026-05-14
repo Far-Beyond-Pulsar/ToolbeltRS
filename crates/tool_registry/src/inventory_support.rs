@@ -71,9 +71,9 @@ struct InventoryTool {
 }
 
 impl ChatTool for InventoryTool {
-    fn name(&self) -> &'static str { self.name }
-    fn description(&self) -> &'static str { self.description }
-    fn category(&self) -> Option<&'static str> { self.category }
+    fn name(&self) -> &str { self.name }
+    fn description(&self) -> &str { self.description }
+    fn category(&self) -> Option<&str> { self.category }
     fn parameters_schema(&self) -> Value { self.parameters_schema.clone() }
 
     fn execute(&self, args: Value, _ctx: &ToolContext) -> anyhow::Result<Value> {

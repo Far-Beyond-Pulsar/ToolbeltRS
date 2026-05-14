@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
-use tool_registry::{ChatTool, PluginToolRegistry, ToolContext, ToolDefinition, ToolPlugin, ToolRegistry, tool_params};
+use tool_registry::{ChatTool, DynamicTool, PluginToolRegistry, ToolContext, ToolDefinition, ToolPlugin, ToolRegistry, tool_params};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test fixtures
@@ -10,8 +10,8 @@ use tool_registry::{ChatTool, PluginToolRegistry, ToolContext, ToolDefinition, T
 
 struct EchoTool;
 impl ChatTool for EchoTool {
-    fn name(&self)        -> &'static str { "echo" }
-    fn description(&self) -> &'static str { "Echoes the input text." }
+    fn name(&self)        -> &str { "echo" }
+    fn description(&self) -> &str { "Echoes the input text." }
     fn parameters_schema(&self) -> Value  { tool_params! { req "text": string = "Text to echo" } }
     fn execute(&self, args: Value, _ctx: &ToolContext) -> anyhow::Result<Value> {
         let text = args["text"].as_str().unwrap_or("").to_string();
@@ -21,9 +21,9 @@ impl ChatTool for EchoTool {
 
 struct AddTool;
 impl ChatTool for AddTool {
-    fn name(&self)        -> &'static str { "add" }
-    fn description(&self) -> &'static str { "Adds two integers." }
-    fn category(&self)    -> Option<&'static str> { Some("math") }
+    fn name(&self)        -> &str { "add" }
+    fn description(&self) -> &str { "Adds two integers." }
+    fn category(&self)    -> Option<&str> { Some("math") }
     fn parameters_schema(&self) -> Value {
         tool_params! {
             req "a": integer = "First operand",
@@ -39,8 +39,8 @@ impl ChatTool for AddTool {
 
 struct FailTool;
 impl ChatTool for FailTool {
-    fn name(&self)        -> &'static str { "fail" }
-    fn description(&self) -> &'static str { "Always fails." }
+    fn name(&self)        -> &str { "fail" }
+    fn description(&self) -> &str { "Always fails." }
     fn parameters_schema(&self) -> Value  { tool_params!() }
     fn execute(&self, _args: Value, _ctx: &ToolContext) -> anyhow::Result<Value> {
         anyhow::bail!("intentional failure")
@@ -52,8 +52,8 @@ struct CounterTool {
     count: Arc<Mutex<u32>>,
 }
 impl ChatTool for CounterTool {
-    fn name(&self)        -> &'static str { "counter" }
-    fn description(&self) -> &'static str { "Increments a shared counter." }
+    fn name(&self)        -> &str { "counter" }
+    fn description(&self) -> &str { "Increments a shared counter." }
     fn parameters_schema(&self) -> Value  { tool_params!() }
     fn execute(&self, _args: Value, _ctx: &ToolContext) -> anyhow::Result<Value> {
         let mut c = self.count.lock().unwrap();
@@ -114,8 +114,8 @@ fn register_overwrites_same_name() {
     // Register a different tool under the same name
     struct EchoTool2;
     impl ChatTool for EchoTool2 {
-        fn name(&self) -> &'static str { "echo" }
-        fn description(&self) -> &'static str { "overwritten" }
+        fn name(&self) -> &str { "echo" }
+        fn description(&self) -> &str { "overwritten" }
         fn parameters_schema(&self) -> Value { tool_params!() }
         fn execute(&self, _a: Value, _c: &ToolContext) -> anyhow::Result<Value> {
             Ok(json!({ "v": 2 }))
@@ -524,8 +524,8 @@ fn plugins_can_be_boxed_as_trait_objects() {
 
 struct WorkspaceTool;
 impl ChatTool for WorkspaceTool {
-    fn name(&self)        -> &'static str { "workspace" }
-    fn description(&self) -> &'static str { "Returns workspace root." }
+    fn name(&self)        -> &str { "workspace" }
+    fn description(&self) -> &str { "Returns workspace root." }
     fn parameters_schema(&self) -> Value  { tool_params!() }
     fn execute(&self, _args: Value, ctx: &ToolContext) -> anyhow::Result<Value> {
         let root = ctx.workspace_root
@@ -548,8 +548,8 @@ fn context_workspace_root_accessible_in_tool() {
 
 struct ExtraTool;
 impl ChatTool for ExtraTool {
-    fn name(&self)        -> &'static str { "extra_tool" }
-    fn description(&self) -> &'static str { "Reads a typed extra." }
+    fn name(&self)        -> &str { "extra_tool" }
+    fn description(&self) -> &str { "Reads a typed extra." }
     fn parameters_schema(&self) -> Value  { tool_params!() }
     fn execute(&self, _args: Value, ctx: &ToolContext) -> anyhow::Result<Value> {
         let val = ctx.get_extra::<u32>("magic_number").copied().unwrap_or(0);
@@ -567,4 +567,215 @@ fn context_extras_accessible_in_tool() {
 
     let res = r.execute("extra_tool", json!({}), &ctx).unwrap();
     assert_eq!(res["value"], 42);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime tools — DynamicTool
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn dynamic_tool_builder_basic() {
+    let tool = DynamicTool::builder("ping")
+        .description("Returns pong")
+        .handler(|_args, _ctx| Ok(json!({ "message": "pong" })))
+        .build();
+
+    let mut r = ToolRegistry::new();
+    r.register(Arc::new(tool));
+
+    let res = r.execute("ping", json!({}), &ToolContext::default()).unwrap();
+    assert_eq!(res["message"], "pong");
+}
+
+#[test]
+fn dynamic_tool_name_and_description() {
+    let tool = DynamicTool::builder("my_tool")
+        .description("does stuff")
+        .handler(|_a, _c| Ok(json!({})))
+        .build();
+
+    assert_eq!(tool.name(), "my_tool");
+    assert_eq!(tool.description(), "does stuff");
+}
+
+#[test]
+fn dynamic_tool_category_defaults_to_none() {
+    let tool = DynamicTool::builder("t")
+        .handler(|_a, _c| Ok(json!({})))
+        .build();
+    assert!(tool.category().is_none());
+}
+
+#[test]
+fn dynamic_tool_category_is_set() {
+    let tool = DynamicTool::builder("t")
+        .category("math")
+        .handler(|_a, _c| Ok(json!({})))
+        .build();
+    assert_eq!(tool.category(), Some("math"));
+}
+
+#[test]
+fn dynamic_tool_custom_schema() {
+    let schema = tool_params! { req "x": integer = "Input value" };
+    let tool = DynamicTool::builder("double")
+        .description("Doubles x")
+        .parameters(schema.clone())
+        .handler(|args, _ctx| {
+            let x = args["x"].as_i64().unwrap_or(0);
+            Ok(json!({ "result": x * 2 }))
+        })
+        .build();
+
+    let mut r = ToolRegistry::new();
+    r.register(Arc::new(tool));
+
+    let res = r.execute("double", json!({ "x": 7 }), &ToolContext::default()).unwrap();
+    assert_eq!(res["result"], 14);
+}
+
+#[test]
+fn dynamic_tool_can_return_error() {
+    let tool = DynamicTool::builder("bad")
+        .handler(|_a, _c| anyhow::bail!("runtime error"))
+        .build();
+
+    let mut r = ToolRegistry::new();
+    r.register(Arc::new(tool));
+
+    let err = r.execute("bad", json!({}), &ToolContext::default());
+    assert!(err.is_err());
+    assert!(err.unwrap_err().to_string().contains("runtime error"));
+}
+
+#[test]
+fn dynamic_tool_receives_context() {
+    let tool = DynamicTool::builder("ctx_reader")
+        .handler(|_args, ctx| {
+            let root = ctx
+                .workspace_root
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| "none".to_string());
+            Ok(json!({ "root": root }))
+        })
+        .build();
+
+    let mut r = ToolRegistry::new();
+    r.register(Arc::new(tool));
+
+    let ctx = ToolContext::new().with_workspace("/dynamic/ws");
+    let res = r.execute("ctx_reader", json!({}), &ctx).unwrap();
+    assert_eq!(res["root"], "/dynamic/ws");
+}
+
+#[test]
+fn dynamic_tool_definition_is_correct() {
+    let schema = tool_params! { req "q": string = "Query" };
+    let tool = DynamicTool::builder("search")
+        .description("Search something")
+        .category("web")
+        .parameters(schema)
+        .handler(|_a, _c| Ok(json!({})))
+        .build();
+
+    let def = tool.definition();
+    assert_eq!(def.name, "search");
+    assert_eq!(def.description, "Search something");
+    assert_eq!(def.category.as_deref(), Some("web"));
+    assert!(def.parameters_schema["properties"]["q"].is_object());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime tools — register_fn
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn register_fn_registers_and_executes() {
+    let mut r = ToolRegistry::new();
+    r.register_fn(
+        "greet",
+        "Returns a greeting",
+        tool_params! { req "name": string = "Name" },
+        |args, _ctx| {
+            let name = args["name"].as_str().unwrap_or("world");
+            Ok(json!({ "greeting": format!("Hello, {name}!") }))
+        },
+    );
+
+    assert!(r.contains("greet"));
+    let res = r.execute("greet", json!({ "name": "Alice" }), &ToolContext::default()).unwrap();
+    assert_eq!(res["greeting"], "Hello, Alice!");
+}
+
+#[test]
+fn register_fn_tool_appears_in_names() {
+    let mut r = ToolRegistry::new();
+    r.register_fn("fn_tool", "desc", tool_params!(), |_a, _c| Ok(json!({})));
+    assert!(r.names().contains(&"fn_tool"));
+}
+
+#[test]
+fn register_fn_tool_appears_in_definitions() {
+    let mut r = ToolRegistry::new();
+    r.register_fn("fn_def", "my description", tool_params!(), |_a, _c| Ok(json!({})));
+    let defs = r.definitions();
+    let d = defs.iter().find(|d| d.name == "fn_def").unwrap();
+    assert_eq!(d.description, "my description");
+}
+
+#[test]
+fn register_fn_tool_appears_in_openai_array() {
+    let mut r = ToolRegistry::new();
+    r.register_fn("fn_openai", "desc", tool_params!(), |_a, _c| Ok(json!({})));
+    let arr = r.openai_tools_array();
+    let a = arr.as_array().unwrap();
+    assert!(a.iter().any(|v| v["function"]["name"] == "fn_openai"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime tools — unregister
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn unregister_removes_tool() {
+    let mut r = registry_with_defaults();
+    assert!(r.contains("echo"));
+    let removed = r.unregister("echo");
+    assert!(removed);
+    assert!(!r.contains("echo"));
+}
+
+#[test]
+fn unregister_returns_false_for_unknown() {
+    let mut r = registry_with_defaults();
+    assert!(!r.unregister("nonexistent_xyz"));
+}
+
+#[test]
+fn unregister_reduces_count() {
+    let mut r = registry_with_defaults(); // echo, add, fail
+    assert_eq!(r.names().len(), 3);
+    r.unregister("fail");
+    assert_eq!(r.names().len(), 2);
+}
+
+#[test]
+fn unregister_then_reregister() {
+    let mut r = ToolRegistry::new();
+    r.register_fn("dynamic", "v1", tool_params!(), |_a, _c| Ok(json!({ "v": 1 })));
+    r.unregister("dynamic");
+    r.register_fn("dynamic", "v2", tool_params!(), |_a, _c| Ok(json!({ "v": 2 })));
+
+    let res = r.execute("dynamic", json!({}), &ToolContext::default()).unwrap();
+    assert_eq!(res["v"], 2);
+}
+
+#[test]
+fn unregister_makes_execute_fail() {
+    let mut r = ToolRegistry::new();
+    r.register(Arc::new(EchoTool));
+    r.unregister("echo");
+    let err = r.execute("echo", json!({ "text": "hi" }), &ToolContext::default());
+    assert!(err.is_err());
 }

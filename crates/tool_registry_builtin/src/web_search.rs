@@ -10,9 +10,9 @@ use tool_registry::{tool_params, ChatTool, ToolContext};
 pub struct WebSearchTool;
 
 impl ChatTool for WebSearchTool {
-    fn name(&self) -> &'static str { "web_search" }
-    fn category(&self) -> Option<&'static str> { Some("web") }
-    fn description(&self) -> &'static str {
+    fn name(&self) -> &str { "web_search" }
+    fn category(&self) -> Option<&str> { Some("web") }
+    fn description(&self) -> &str {
         "Search the web via DuckDuckGo. Returns up to 10 results with title, summary, and URL."
     }
     fn parameters_schema(&self) -> Value {

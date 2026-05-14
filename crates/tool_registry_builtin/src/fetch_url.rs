@@ -9,9 +9,9 @@ use tool_registry::{tool_params, ChatTool, ToolContext};
 pub struct FetchUrlTool;
 
 impl ChatTool for FetchUrlTool {
-    fn name(&self) -> &'static str { "fetch_url" }
-    fn category(&self) -> Option<&'static str> { Some("web") }
-    fn description(&self) -> &'static str {
+    fn name(&self) -> &str { "fetch_url" }
+    fn category(&self) -> Option<&str> { Some("web") }
+    fn description(&self) -> &str {
         "Fetch and return the text content of a URL (HTML markup stripped). \
          Truncates large responses to ~8 000 chars."
     }

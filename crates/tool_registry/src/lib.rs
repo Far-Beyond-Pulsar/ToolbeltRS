@@ -39,12 +39,14 @@ pub mod inventory_support;
 pub mod macros;
 pub mod plugin;
 pub mod registry;
+pub mod runtime;
 pub mod tool;
 
 pub use context::ToolContext;
 pub use inventory_support::{InventoryEntry, PluginToolRegistry};
 pub use plugin::ToolPlugin;
 pub use registry::ToolRegistry;
+pub use runtime::{DynamicTool, DynamicToolBuilder};
 pub use tool::{ChatTool, ToolDefinition};
 
 // Re-export inventory so plugin crates can do `tool_registry::inventory::submit!`

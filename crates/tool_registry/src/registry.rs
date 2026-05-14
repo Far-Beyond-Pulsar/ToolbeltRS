@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::runtime::{DynamicTool, DynamicToolBuilder};
 use crate::tool::ChatTool;
 use crate::{PluginToolRegistry, ToolContext, ToolDefinition};
 use serde_json::{json, Value};
@@ -85,6 +86,84 @@ impl ToolRegistry {
             self.tools.values().map(|t| t.definition()).collect();
         defs.sort_by(|a, b| a.name.cmp(&b.name));
         defs
+    }
+
+    /// Remove a tool by name.
+    ///
+    /// Returns `true` if a tool with that name was present and removed,
+    /// `false` if no such tool existed.
+    pub fn unregister(&mut self, name: &str) -> bool {
+        self.tools.remove(name).is_some()
+    }
+
+    /// Register a tool defined inline as a closure, without implementing
+    /// [`ChatTool`] manually.
+    ///
+    /// This is a shorthand for [`DynamicTool::builder`] +
+    /// [`ToolRegistry::register`].  For more control (e.g. setting a category
+    /// or a custom schema) use [`build_tool`](Self::build_tool) instead.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tool_registry::{ToolRegistry, ToolContext, tool_params};
+    /// use serde_json::json;
+    ///
+    /// let mut registry = ToolRegistry::new();
+    /// registry.register_fn(
+    ///     "ping",
+    ///     "Returns pong",
+    ///     tool_params!(),
+    ///     |_args, _ctx| Ok(json!({ "message": "pong" })),
+    /// );
+    /// let result = registry.execute("ping", json!({}), &ToolContext::default()).unwrap();
+    /// assert_eq!(result["message"], "pong");
+    /// ```
+    pub fn register_fn<F>(
+        &mut self,
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters_schema: Value,
+        handler: F,
+    ) where
+        F: Fn(Value, &ToolContext) -> anyhow::Result<Value> + Send + Sync + 'static,
+    {
+        let tool = DynamicTool::builder(name)
+            .description(description)
+            .parameters(parameters_schema)
+            .handler(handler)
+            .build();
+        self.register(Arc::new(tool));
+    }
+
+    /// Start building a [`DynamicTool`] that will be registered into this
+    /// registry once [`DynamicToolBuilder::register_into`] is called.
+    ///
+    /// This is a convenience for the fluent builder pattern when you want to
+    /// set a category or other fields not available through [`register_fn`](Self::register_fn).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use tool_registry::{ToolRegistry, ToolContext, tool_params};
+    /// use serde_json::json;
+    ///
+    /// let mut registry = ToolRegistry::new();
+    /// let tool = registry
+    ///     .build_tool("add")
+    ///     .description("Add two numbers")
+    ///     .category("math")
+    ///     .parameters(tool_params! { req "a": number = "First operand", req "b": number = "Second operand" })
+    ///     .handler(|args, _ctx| {
+    ///         let a = args["a"].as_f64().unwrap_or(0.0);
+    ///         let b = args["b"].as_f64().unwrap_or(0.0);
+    ///         Ok(json!({ "result": a + b }))
+    ///     })
+    ///     .build();
+    /// registry.register(std::sync::Arc::new(tool));
+    /// ```
+    pub fn build_tool(&self, name: impl Into<String>) -> DynamicToolBuilder {
+        DynamicTool::builder(name)
     }
 
     /// Serialise all tool definitions as a JSON array — the shape expected by
