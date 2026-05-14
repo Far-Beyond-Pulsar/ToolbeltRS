@@ -53,7 +53,7 @@ pub struct InventoryEntry {
     pub documentation: &'static str,
 
     /// Raw function pointer that deserialises JSON args and calls the real fn.
-    pub handler: fn(Value) -> anyhow::Result<Value>,
+    pub handler: fn(Value, &ToolContext) -> anyhow::Result<Value>,
 }
 
 inventory::collect!(InventoryEntry);
@@ -67,7 +67,7 @@ struct InventoryTool {
     description: &'static str,
     category: Option<&'static str>,
     parameters_schema: Value,
-    handler: fn(Value) -> anyhow::Result<Value>,
+    handler: fn(Value, &ToolContext) -> anyhow::Result<Value>,
 }
 
 impl ChatTool for InventoryTool {
@@ -76,8 +76,8 @@ impl ChatTool for InventoryTool {
     fn category(&self) -> Option<&str> { self.category }
     fn parameters_schema(&self) -> Value { self.parameters_schema.clone() }
 
-    fn execute(&self, args: Value, _ctx: &ToolContext) -> anyhow::Result<Value> {
-        (self.handler)(args)
+    fn execute(&self, args: Value, ctx: &ToolContext) -> anyhow::Result<Value> {
+        (self.handler)(args, ctx)
     }
 }
 

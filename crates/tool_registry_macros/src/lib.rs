@@ -57,7 +57,7 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::Parser, parse_macro_input, punctuated::Punctuated, token::Comma, Expr, FnArg, ItemFn,
+    parse_macro_input, punctuated::Punctuated, token::Comma, Expr, FnArg, ItemFn,
     Meta, Pat, Type,
 };
 
@@ -128,6 +128,7 @@ pub fn tool(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[doc(hidden)]
         pub fn #wrapper_fn(
             tool_args: serde_json::Value,
+            _ctx: &tool_registry::ToolContext,
         ) -> anyhow::Result<serde_json::Value> {
             #param_extractions
             #fn_name(#(#param_idents),*)
