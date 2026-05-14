@@ -7,6 +7,8 @@ use crate::runtime::{DynamicTool, DynamicToolBuilder};
 use crate::tool::ChatTool;
 use crate::{PluginToolRegistry, ToolContext, ToolDefinition};
 use serde_json::{json, Value};
+use std::time::Instant;
+use tracing::debug;
 
 /// Central registry that maps tool names → `Arc<dyn ChatTool>`.
 ///
@@ -61,11 +63,15 @@ impl ToolRegistry {
         args: Value,
         ctx: &ToolContext,
     ) -> anyhow::Result<Value> {
+        let started_at = Instant::now();
+        debug!(tool = name, current_file = ?ctx.current_file, "tool registry execute start");
         let tool = self
             .tools
             .get(name)
             .ok_or_else(|| anyhow::anyhow!("Unknown tool: {name}"))?;
-        tool.execute(args, ctx)
+        let result = tool.execute(args, ctx);
+        debug!(tool = name, current_file = ?ctx.current_file, elapsed_ms = started_at.elapsed().as_millis() as u64, success = result.is_ok(), "tool registry execute end");
+        result
     }
 
     /// Returns `true` if a tool with this name is registered.

@@ -11,3 +11,4 @@ path = "../examples/plugin_tools.rs"
 tool_registry = { path = "../crates/tool_registry" }
 serde_json.workspace = true
 anyhow.workspace     = true
+tracing = "0.1"

@@ -33,6 +33,7 @@
 //! ```
 
 use std::sync::Arc;
+use tracing::debug;
 
 use serde_json::{json, Value};
 
@@ -74,7 +75,11 @@ impl ChatTool for DynamicTool {
     }
 
     fn execute(&self, args: Value, ctx: &ToolContext) -> anyhow::Result<Value> {
-        (self.handler)(args, ctx)
+        debug!(tool = self.name.as_str(), current_file = ?ctx.current_file, "dynamic tool execute start");
+        let started_at = std::time::Instant::now();
+        let result = (self.handler)(args, ctx);
+        debug!(tool = self.name.as_str(), current_file = ?ctx.current_file, elapsed_ms = started_at.elapsed().as_millis() as u64, success = result.is_ok(), "dynamic tool execute end");
+        result
     }
 }
 

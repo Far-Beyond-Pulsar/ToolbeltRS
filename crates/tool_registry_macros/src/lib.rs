@@ -130,8 +130,11 @@ pub fn tool(attr: TokenStream, item: TokenStream) -> TokenStream {
             tool_args: serde_json::Value,
             _ctx: &tool_registry::ToolContext,
         ) -> anyhow::Result<serde_json::Value> {
+            ::tracing::debug!(tool = #tool_name, "tool macro wrapper start");
             #param_extractions
-            #fn_name(#(#param_idents),*)
+            let result = #fn_name(#(#param_idents),*);
+            ::tracing::debug!(tool = #tool_name, success = result.is_ok(), "tool macro wrapper end");
+            result
         }
 
         tool_registry::inventory::submit! {
