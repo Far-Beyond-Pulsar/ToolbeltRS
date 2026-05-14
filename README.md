@@ -1,6 +1,6 @@
 <div align="center">
 
-# ai-tool-registry
+# ToolbeltRS
 
 **A generic, engine-agnostic AI tool registry for Rust.**
 
