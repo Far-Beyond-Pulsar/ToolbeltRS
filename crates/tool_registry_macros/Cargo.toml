@@ -16,3 +16,9 @@ proc-macro2 = "1"
 quote       = "1"
 syn         = { version = "2", features = ["full", "extra-traits"] }
 serde_json  = { workspace = true }
+
+[dev-dependencies]
+tool_registry = { path = "../tool_registry" }
+serde_json    = { workspace = true }
+anyhow        = { workspace = true }
+inventory     = { workspace = true }

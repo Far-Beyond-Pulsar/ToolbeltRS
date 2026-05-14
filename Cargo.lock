@@ -146,6 +146,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12a0bb14ac04a9fcf170d0bbbef949b44cc492f4452bd20c095636956f653642"
 
 [[package]]
+name = "examples_crate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tool_registry",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1317,10 +1326,13 @@ dependencies = [
 name = "tool_registry_macros"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "inventory",
  "proc-macro2",
  "quote",
  "serde_json",
  "syn",
+ "tool_registry",
 ]
 
 [[package]]
