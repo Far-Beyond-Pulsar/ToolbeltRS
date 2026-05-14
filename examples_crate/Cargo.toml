@@ -1,0 +1,13 @@
+[package]
+name    = "examples_crate"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "plugin_tools"
+path = "../examples/plugin_tools.rs"
+
+[dependencies]
+tool_registry = { path = "../crates/tool_registry" }
+serde_json.workspace = true
+anyhow.workspace     = true

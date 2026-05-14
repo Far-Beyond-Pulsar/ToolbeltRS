@@ -1,0 +1,18 @@
+[package]
+name        = "tool_registry_macros"
+description = "Proc-macro crate for tool_registry — #[tool] attribute and tool_params! helper."
+keywords    = ["ai", "tools", "macros", "proc-macro"]
+
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote       = "1"
+syn         = { version = "2", features = ["full", "extra-traits"] }
+serde_json  = { workspace = true }

@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tool_registry",
+    "crates/tool_registry_macros",
+    "crates/tool_registry_builtin",
+    "examples_crate",
+]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2021"
+license      = "MIT OR Apache-2.0"
+repository   = "https://github.com/Far-Beyond-Pulsar/ai-tool-registry"
+rust-version = "1.75"
+
+[workspace.dependencies]
+serde       = { version = "1",    features = ["derive"] }
+serde_json  = { version = "1" }
+anyhow      = { version = "1" }
+inventory   = { version = "0.3" }

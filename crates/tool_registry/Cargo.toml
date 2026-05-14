@@ -1,0 +1,16 @@
+[package]
+name        = "tool_registry"
+description = "Generic AI tool registry — define, register, and dispatch tools at compile time and runtime."
+keywords    = ["ai", "tools", "registry", "plugin", "llm"]
+categories  = ["development-tools", "api-bindings"]
+
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+
+[dependencies]
+serde.workspace      = true
+serde_json.workspace = true
+anyhow.workspace     = true
+inventory.workspace  = true

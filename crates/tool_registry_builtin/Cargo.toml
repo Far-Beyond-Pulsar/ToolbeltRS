@@ -1,0 +1,19 @@
+[package]
+name        = "tool_registry_builtin"
+description = "Built-in tools for tool_registry: web_search, fetch_url, and more."
+keywords    = ["ai", "tools", "builtin", "web-search"]
+
+version.workspace     = true
+edition.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+
+[dependencies]
+tool_registry = { path = "../tool_registry" }
+serde.workspace      = true
+serde_json.workspace = true
+anyhow.workspace     = true
+
+reqwest  = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+scraper  = { version = "0.20" }
+urlencoding = { version = "2" }
