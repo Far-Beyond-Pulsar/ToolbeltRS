@@ -48,9 +48,35 @@ pub fn always_fail() -> anyhow::Result<Value> {
     anyhow::bail!("deliberate failure")
 }
 
+/// Place points in the world.
+///
+/// # Arguments
+/// * `points` - World positions as `[x, y, z]`.
+/// * `tags` - Free-form labels.
+/// * `extra` - Any JSON payload.
+#[tool]
+pub fn place_points(
+    points: Vec<[f32; 3]>,
+    tags: Option<Vec<String>>,
+    extra: Option<Value>,
+) -> anyhow::Result<Value> {
+    Ok(json!({ "count": points.len(), "tags": tags, "extra": extra }))
+}
+
+/// Reports the file from the caller's context.
+#[tool]
+pub fn current_file(ctx: &tool_registry::ToolContext, suffix: String) -> anyhow::Result<Value> {
+    let file = ctx.current_file.as_ref().map(|p| p.display().to_string());
+    Ok(json!({ "file": file, "suffix": suffix }))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+fn ctx() -> tool_registry::ToolContext {
+    tool_registry::ToolContext::default()
+}
 
 fn entry_for_tool(fn_name: &str) -> Option<&'static InventoryEntry> {
     inventory::iter::<InventoryEntry>
@@ -187,31 +213,31 @@ fn option_string_maps_to_string_type() {
 
 #[test]
 fn wrapper_dispatches_to_original_function() {
-    let result = greet_tool_wrapper(json!({ "name": "rustacean" })).unwrap();
+    let result = greet_tool_wrapper(json!({ "name": "rustacean" }), &ctx()).unwrap();
     assert_eq!(result["greeting"], "hello, rustacean!");
 }
 
 #[test]
 fn wrapper_passes_integer_args() {
-    let result = add_ints_tool_wrapper(json!({ "a": 10, "b": 32 })).unwrap();
+    let result = add_ints_tool_wrapper(json!({ "a": 10, "b": 32 }), &ctx()).unwrap();
     assert_eq!(result["result"], 42);
 }
 
 #[test]
 fn wrapper_optional_param_present() {
-    let result = maybe_greet_tool_wrapper(json!({ "name": "Alice" })).unwrap();
+    let result = maybe_greet_tool_wrapper(json!({ "name": "Alice" }), &ctx()).unwrap();
     assert_eq!(result["greeting"], "hi, Alice");
 }
 
 #[test]
 fn wrapper_optional_param_absent_uses_default() {
-    let result = maybe_greet_tool_wrapper(json!({})).unwrap();
+    let result = maybe_greet_tool_wrapper(json!({}), &ctx()).unwrap();
     assert_eq!(result["greeting"], "hi, world");
 }
 
 #[test]
 fn wrapper_propagates_tool_error() {
-    let err = always_fail_tool_wrapper(json!({}));
+    let err = always_fail_tool_wrapper(json!({}), &ctx());
     assert!(err.is_err());
     assert!(err.unwrap_err().to_string().contains("deliberate failure"));
 }
@@ -219,7 +245,7 @@ fn wrapper_propagates_tool_error() {
 #[test]
 fn wrapper_returns_err_for_missing_required_param() {
     // greet requires "name" — omit it
-    let err = greet_tool_wrapper(json!({}));
+    let err = greet_tool_wrapper(json!({}), &ctx());
     assert!(err.is_err(), "expected error for missing required param");
     let msg = err.unwrap_err().to_string();
     assert!(
@@ -271,4 +297,62 @@ fn from_namespace_all_tools_present() {
     assert!(registry.contains("maybe_greet"));
     assert!(registry.contains("all_types"));
     assert!(registry.contains("always_fail"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Containers, argument docs and context injection
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn vec_of_fixed_arrays_maps_to_nested_array_schema() {
+    let d = def("place_points");
+    let points = &d["parameters"]["properties"]["points"];
+    assert_eq!(points["type"], "array");
+    assert_eq!(points["items"]["type"], "array");
+    assert_eq!(points["items"]["items"]["type"], "number");
+    assert_eq!(points["items"]["minItems"], 3);
+    assert_eq!(points["items"]["maxItems"], 3);
+    assert_eq!(d["parameters"]["properties"]["tags"]["items"]["type"], "string");
+}
+
+#[test]
+fn value_param_has_open_schema() {
+    let d = def("place_points");
+    assert!(d["parameters"]["properties"]["extra"].get("type").is_none());
+}
+
+#[test]
+fn arguments_section_becomes_param_descriptions() {
+    let d = def("place_points");
+    assert_eq!(d["description"], "Place points in the world.");
+    assert_eq!(
+        d["parameters"]["properties"]["points"]["description"],
+        "World positions as `[x, y, z]`."
+    );
+}
+
+#[test]
+fn wrapper_rejects_malformed_optional_param() {
+    let err = place_points_tool_wrapper(json!({ "points": [], "tags": 5 }), &ctx());
+    assert!(err.unwrap_err().to_string().contains("tags"));
+}
+
+#[test]
+fn wrapper_treats_null_optional_as_absent() {
+    let result =
+        place_points_tool_wrapper(json!({ "points": [[1, 2, 3]], "tags": null }), &ctx()).unwrap();
+    assert_eq!(result["count"], 1);
+    assert!(result["tags"].is_null());
+}
+
+#[test]
+fn context_param_is_injected_and_hidden_from_schema() {
+    let d = def("current_file");
+    let props = d["parameters"]["properties"].as_object().unwrap();
+    assert_eq!(props.len(), 1, "only `suffix` should be in the schema: {props:?}");
+    assert_eq!(d["parameters"]["required"], json!(["suffix"]));
+
+    let ctx = tool_registry::ToolContext::new().with_current_file("level.level");
+    let result = current_file_tool_wrapper(json!({ "suffix": "x" }), &ctx).unwrap();
+    assert_eq!(result["file"], "level.level");
 }

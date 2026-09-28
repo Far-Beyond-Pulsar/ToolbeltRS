@@ -397,8 +397,41 @@ All options are optional. `#[tool]` with no arguments is valid.
 | `i8`…`i128`, `u8`…`u128`, `isize`, `usize` | `"integer"` | |
 | `f32`, `f64` | `"number"` | |
 | `bool` | `"boolean"` | |
-| `Option<T>` | type of inner `T` | **Not** added to `required` |
+| `Vec<T>`, `VecDeque<T>`, `HashSet<T>`, `BTreeSet<T>`, `[T]` | `"array"` | `items` is the schema of `T` |
+| `[T; N]` | `"array"` | `minItems` / `maxItems` = `N` |
+| `serde_json::Value` | *(open)* | Any JSON value; no `type` constraint |
+| `Option<T>` | type of inner `T` | **Not** added to `required`; `null` counts as absent |
+| `&ToolContext` | *(not in schema)* | The caller's context is passed through |
 | anything else | `"object"` | For `serde::Deserialize` structs |
+
+### Parameter descriptions
+
+A rustdoc `# Arguments` (or `# Parameters`) section is lifted out of the tool
+description and attached to each parameter as its schema `description`:
+
+```rust
+/// Move an object.
+///
+/// # Arguments
+/// * `id` - Object id.
+/// * `position` - World position `[x, y, z]` in metres.
+#[tool]
+pub fn move_object(id: String, position: [f32; 3]) -> anyhow::Result<Value> { /* … */ }
+```
+
+### Tool context
+
+Declare a `&ToolContext` parameter to read the caller's context (current file,
+workspace root, typed extras). It is injected by the wrapper and never appears
+in the schema:
+
+```rust
+/// Describe the file being edited.
+#[tool]
+pub fn describe_file(ctx: &ToolContext) -> anyhow::Result<Value> {
+    Ok(serde_json::json!({ "file": ctx.current_file }))
+}
+```
 
 Parameters not wrapped in `Option<_>` are automatically added to the `required` array:
 
@@ -436,9 +469,15 @@ pub const TOOL_DEF_MY_TOOL: &str = r#"{"name":"my_tool","description":"…",...}
 pub const TOOL_DOC_MY_TOOL: &str = "# `my_tool`\n…";
 
 // 3. JSON-arg-extracting wrapper (the actual inventory handler fn)
-pub fn my_tool_tool_wrapper(args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
-    let a: String      = serde_json::from_value(args.get("a").ok_or(…)?.clone())?;
-    let b: Option<i64> = args.get("b").and_then(|v| serde_json::from_value(v.clone()).ok());
+pub fn my_tool_tool_wrapper(
+    tool_args: serde_json::Value,
+    ctx: &tool_registry::ToolContext,        // passed to any `&ToolContext` parameter
+) -> anyhow::Result<serde_json::Value> {
+    let a: String      = serde_json::from_value(tool_args.get("a").ok_or(…)?.clone())?;
+    let b: Option<i64> = match tool_args.get("b") {
+        None | Some(Value::Null) => None,
+        Some(v) => serde_json::from_value(v.clone())?,  // wrong type is an error
+    };
     my_tool(a, b)
 }
 
